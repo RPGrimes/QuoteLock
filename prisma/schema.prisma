@@ -1,0 +1,124 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserPlan {
+  FREE
+  SOLO
+  BUSINESS
+}
+
+enum AgreementStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  DEPOSIT_SENT
+  DEPOSIT_RECEIVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AuditActor {
+  CLIENT
+  CONTRACTOR
+  SYSTEM
+}
+
+enum AuditEventType {
+  CREATED
+  UPDATED
+  SENT
+  VIEWED
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  DEPOSIT_SENT
+  DEPOSIT_RECEIVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  CORRECTION
+  STATUS_REVERTED
+}
+
+model User {
+  id                String         @id @default(cuid())
+  email             String         @unique
+  passwordHash      String
+  businessName      String?
+  country           String?
+  defaultCurrency   String?        @default("GBP")
+  defaultBankDetails String?       @db.Text
+  plan              UserPlan       @default(FREE)
+  createdAt         DateTime       @default(now())
+  agreements        Agreement[]
+  monthlyUsage      MonthlyUsage[]
+}
+
+model Agreement {
+  id                  String         @id @default(cuid())
+  publicSlug          String         @unique // Long, unguessable identifier
+  userId              String
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientName          String?
+  clientEmail         String?
+  title               String
+  workIncluded        String          @db.Text
+  workExcluded        String          @db.Text
+  totalPrice          Decimal
+  depositAmount       Decimal
+  balanceDue          Decimal
+  currency            String
+  expiresAt           DateTime?
+  paymentInstructions String         @db.Text
+  externalPaymentLink String?
+  cancellationTerms   String         @db.Text
+  governingCountry    String
+  status              AgreementStatus @default(DRAFT)
+  lockedAt            DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  auditEvents         AuditEvent[]
+  
+  @@index([userId])
+  @@index([publicSlug])
+  @@index([status])
+}
+
+model AuditEvent {
+  id          String          @id @default(cuid())
+  agreementId String
+  agreement   Agreement       @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+  actor       AuditActor
+  type        AuditEventType
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?
+  createdAt   DateTime        @default(now())
+  
+  @@index([agreementId])
+  @@index([createdAt])
+  @@index([actor])
+  @@index([type])
+}
+
+model MonthlyUsage {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  yearMonth    String   // Format: YYYY-MM
+  createdCount Int      @default(0)
+  
+  @@unique([userId, yearMonth])
+  @@index([userId])
+  @@index([yearMonth])
+}
